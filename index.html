@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apartment/Redelivery List Extractor</title>
+    <!-- Include SheetJS library from a CDN for Excel/CSV file processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #eef2f7;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1000px;
+            margin: auto;
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #1e3a8a;
+            font-size: 2rem;
+            margin-bottom: 20px;
+        }
+        /* Styling for the section title bar, including the collapse button */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #e5e7eb;
+            margin-top: 30px;
+        }
+        .results-section h2 {
+            color: #3b82f6;
+            font-size: 1.5rem;
+            margin: 0;
+            padding: 0;
+            border-bottom: none; /* Title itself should not have a border */
+        }
+        input[type="file"] {
+            display: block;
+            padding: 12px;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 25px;
+            background-color: #f9f9ff;
+            cursor: pointer;
+        }
+        .note {
+            background-color: #eff6ff;
+            color: #1e3a8a;
+            padding: 15px;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+        .results-section {
+            margin-top: 20px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 20px;
+            background-color: #f9fafb;
+        }
+        .results-section table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 15px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .results-section th, .results-section td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .results-section th {
+            background-color: #dbeafe;
+            color: #1e40af;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+        .results-section tr:last-child td {
+            border-bottom: none;
+        }
+        .results-section tr:hover td {
+            background-color: #f0f9ff;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-top: 10px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+            resize: vertical;
+        }
+        .summary-count {
+            font-weight: bold;
+            color: #059669;
+        }
+        .copy-btn {
+            background-color: #3b82f6;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .copy-btn:hover {
+            background-color: #2563eb;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+        }
+        /* Collapse/Expand Styles */
+        .collapsible-content {
+            max-height: 2000px; /* Large initial height */
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+            padding-top: 10px;
+        }
+        .collapsible-content.collapsed {
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+            margin-top: 0;
+        }
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: #3b82f6;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0 10px;
+            transition: transform 0.3s ease;
+            line-height: 1;
+            margin-left: 10px; /* Space between title and toggle */
+        }
+        .toggle-btn.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        /* Flex utility for button/title layout */
+        .flex { display: flex; }
+        .justify-between { justify-content: space-between; }
+        .items-center { align-items: center; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .title-group {
+            display: flex;
+            align-items: center;
+        }
+        /* New button container style for top placement */
+        .top-action-bar {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            .results-section th, .results-section td {
+                padding: 8px;
+                font-size: 0.9rem;
+            }
+            .section-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .top-action-bar {
+                margin-left: 0;
+                margin-top: 10px;
+            }
+            .toggle-btn {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📦 Delivery Tracking List Separator</h1>
+        <div class="note">
+            <p><strong>Instructions:</strong> Upload your Excel (.xlsx) or CSV file. The tool will strictly process only tracking numbers starting with <strong>"MI"</strong>.</p>
+            <p><strong>Filtering Criteria (Enhanced):</strong> Tracking Number starts with "MI" AND Address (Column K) contains common apartment keywords OR apartment/unit numbers preceded by separators (like `,` or space).</p>
+        </div>
+
+        <input type="file" id="fileInput" accept=".xlsx, .xls, .csv">
+
+        <div id="resultsContainer">
+            <p>Upload a file to generate the lists.</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleFile, false);
+
+        /**
+         * Toggles the collapsed state of a content block.
+         */
+        function toggleCollapse(contentId, buttonElement) {
+            const content = document.getElementById(contentId);
+            const isCollapsed = content.classList.contains('collapsed');
+
+            if (isCollapsed) {
+                // Expand
+                content.classList.remove('collapsed');
+                buttonElement.innerHTML = '&#9660;'; // Down arrow
+                buttonElement.setAttribute('aria-expanded', 'true');
+            } else {
+                // Collapse
+                content.classList.add('collapsed');
+                buttonElement.innerHTML = '&#9664;'; // Left arrow
+                buttonElement.setAttribute('aria-expanded', 'false');
+            }
+        }
+
+        /**
+         * Clears all existing content and displays a loading message.
+         */
+        function showLoading() {
+            document.getElementById('resultsContainer').innerHTML = '<p class="text-center">Processing file, please wait...</p>';
+        }
+
+        /**
+         * Copies the content of a specified textarea to the clipboard.
+         * Uses document.execCommand('copy') for better compatibility in iFrame environments.
+         */
+        function copyToClipboard(textareaId, buttonElement) {
+            const textarea = document.getElementById(textareaId);
+            if (textarea) {
+                try {
+                    // Select the content of the textarea
+                    textarea.select();
+                    // Execute the copy command
+                    document.execCommand('copy');
+                    
+                    // Provide feedback
+                    const originalText = buttonElement.textContent;
+                    const originalBg = buttonElement.style.backgroundColor;
+                    
+                    buttonElement.textContent = 'Copied!';
+                    buttonElement.style.backgroundColor = '#10b981'; // Green color
+                    
+                    setTimeout(() => {
+                        buttonElement.textContent = originalText;
+                        buttonElement.style.backgroundColor = originalBg; 
+                    }, 1500);
+
+                } catch (err) {
+                    // Fallback for unexpected copy errors
+                    console.error('Failed to copy text: ', err);
+                    // Inform user without using alert()
+                    buttonElement.textContent = 'Copy Failed!';
+                    buttonElement.style.backgroundColor = '#ef4444'; // Red color
+                    setTimeout(() => {
+                        buttonElement.textContent = originalText; // Revert to original text (e.g., "Copy Apartment MI")
+                        buttonElement.style.backgroundColor = '#3b82f6';
+                    }, 1500);
+                }
+            }
+        }
+
+
+        /**
+         * Main function to handle file upload and processing.
+         */
+        function handleFile(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            showLoading();
+
+            const file = files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    // Assuming the package information is in the first sheet
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+
+                    // Convert sheet to a 2D array, ensuring we handle raw data for addresses
+                    const sheetData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                    // --- Define Column Indices ---
+                    // Tracking Number (TNO) is expected in Column B (index 1)
+                    const TNO_COL_INDEX = 1;
+                    // Address is expected in Column K (index 10)
+                    const ADDRESS_COL_INDEX = 10;
+                    // -----------------------------
+
+                    const apartmentRecords = [];
+                    const redeliveryRecords = [];
+
+                    // Start loop from index 1 to skip the header row (index 0)
+                    for (let i = 1; i < sheetData.length; i++) {
+                        const row = sheetData[i];
+
+                        // Ensure the row has enough columns
+                        if (row.length > ADDRESS_COL_INDEX) {
+                            // Extract and clean the data
+                            const address = (row[ADDRESS_COL_INDEX] || '').toString().trim();
+                            const tno = (row[TNO_COL_INDEX] || '').toString().trim();
+
+                            // Skip rows that are missing a Tracking Number
+                            if (!tno) continue;
+
+                            // --- STRICT FILTER 1: UPS Package Check (Tracking Number must start with "MI") ---
+                            const isUpsPackage = tno.toUpperCase().startsWith('MI');
+
+                            // If it's not a UPS package, ignore it completely (per user request)
+                            if (!isUpsPackage) continue;
+
+                            // --- ENHANCED FILTER 2: Apartment Indicator Check ---
+                            
+                            // 1. Explicit Keywords: unit, apt, ste (case-insensitive)
+                            const keywordPattern = /(unit|apt|ste)/i;
+
+                            // 2. Complex Suffixes: A pattern to catch common apartment formats:
+                            // It looks for a sequence of characters that:
+                            // - Is preceded by a common separator: comma, space, or pound sign ([\s, #])
+                            // - Is followed by 1 or more digits or letters (e.g., F306, 311, A1, L203, A102)
+                            // This specifically targets the end of the address line where these are usually found.
+                            // \s* ensures it catches spaces (e.g., ", 305" or " St 311")
+                            const suffixPattern = /[\s, #-]\s*[a-z]?\d{1,4}[a-z]?\s*$/i;
+
+                            // Combined check: is the address already explicit OR does it contain a complex suffix?
+                            const isApartmentIndicator = keywordPattern.test(address) || suffixPattern.test(address);
+
+                            const record = { tno, address };
+
+                            // A package is an 'Apartment List' item ONLY IF it has an apartment indicator.
+                            if (isApartmentIndicator) {
+                                apartmentRecords.push(record);
+                            } else {
+                                // Remaining UPS packages (without apt indicators) go to Redelivery list
+                                redeliveryRecords.push(record);
+                            }
+                        }
+                    }
+
+                    displayResults(apartmentRecords, redeliveryRecords);
+                } catch (error) {
+                    document.getElementById('resultsContainer').innerHTML = `<p style="color: red;">Error processing file: ${error.message}. Please ensure the file is a valid Excel (.xlsx, .xls) or CSV format and has data in columns B and K.</p>`;
+                    console.error("File processing error:", error);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * Displays the two separate lists (Apartment and Redelivery).
+         */
+        function displayResults(apartmentRecords, redeliveryRecords) {
+            const container = document.getElementById('resultsContainer');
+            let html = '';
+            
+            // --- Apartment List Section ---
+            html += generateListHtml('Apartment List (UPS "MI" + Apt. Indicator)', 'apartment', apartmentRecords);
+
+            // --- Redelivery List Section ---
+            html += generateListHtml('Redelivery/Standard List (Remaining UPS "MI" Packages)', 'redelivery', redeliveryRecords);
+
+            container.innerHTML = html;
+        }
+
+        /**
+         * Helper function to generate the HTML for a single list section, including the copy button.
+         */
+        function generateListHtml(title, type, records) {
+            const contentId = `content-${type}`;
+            const copyId = `tracking-list-${type}`;
+            const buttonText = type === 'apartment' ? 'Copy Apartment MI' : 'Copy Standard MI';
+            
+            let html = `<div class="results-section">`;
+            
+            // Section Header with Title, Toggle Button, and Copy Button
+            html += `<div class="section-header">`;
+            html += `<div class="title-group">`;
+            html += `<h2>${title} <span class="summary-count">(${records.length} records)</span></h2>`;
+            html += `<button class="toggle-btn" onclick="toggleCollapse('${contentId}', this)" aria-expanded="true">
+                         &#9660; <!-- Down arrow symbol -->
+                     </button>`;
+            html += `</div>`;
+            
+            // TOP COPY BUTTON
+            html += `<div class="top-action-bar">`;
+            html += `<button id="btn-top-${type}" class="copy-btn" onclick="copyToClipboard('${copyId}', this)">${buttonText}</button>`;
+            html += `</div>`;
+            
+            html += `</div>`; // End section-header
+
+            if (records.length === 0) {
+                html += `<p>No records found for the ${type} list based on current filters.</p>`;
+                html += `</div>`;
+                return html;
+            }
+
+            // Collapsible Content Wrapper
+            html += `<div id="${contentId}" class="collapsible-content">`;
+
+            // Prepare a plain text list for easy copy-pasting of tracking numbers
+            const trackingNumbersList = records.map(record => record.tno).join('\n');
+
+            // Table of records for manual check
+            html += '<table>';
+            html += '<thead><tr><th>Tracking Number</th><th>Address (Column K)</th></tr></thead>';
+            html += '<tbody>';
+            
+            records.forEach(record => {
+                html += `<tr><td>${record.tno}</td><td>${record.address}</td></tr>`;
+            });
+            
+            html += '</tbody></table>';
+
+            // Copyable text area (moved the copy button to the top)
+            html += `<h3>Tracking Numbers for Copying:</h3>`;
+            html += `<textarea id="${copyId}" rows="10" onclick="this.select();" readonly>${trackingNumbersList}</textarea>`;
+            
+            html += `</div>`; // End collapsible-content
+            html += '</div>'; // End results-section
+            return html;
+        }
+    </script>
+</body>
+</html>
